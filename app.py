@@ -62,7 +62,7 @@ def register_reminder(time_str: str, content: str):
 # --- 3. Gemini 1.5 Flash 설정 ---
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-2.5-flash',
     tools=[get_current_time, get_weather, search_youtube, register_reminder],
     system_instruction="""당신은 사진 분석, 날씨 조회, 유튜브 추천이 가능한 만능 AI 비서입니다.
     사용자와의 이전 대화 내용을 DB에서 불러와 모두 기억하고 있으며, 이를 바탕으로 친절하고 똑똑하게 대답합니다.
