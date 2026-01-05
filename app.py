@@ -76,7 +76,7 @@ google_search_tool = {
 
 # google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash', 
+    model_name='gemini-1.5-flash-latest', 
     tools=my_functions + [google_search_tool],
     system_instruction="""당신은 사진 분석, 실시간 뉴스 검색, 맛집 추천이 가능한 만능 AI 비서입니다.
     - 실시간 정보나 뉴스 질문에는 반드시 구글 검색 도구를 사용하여 최신 정보를 요약하세요.
