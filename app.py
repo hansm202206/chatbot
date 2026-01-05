@@ -62,7 +62,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash', 
+    model_name='gemini-1.5-flash', 
     tools=[
         get_current_time, 
         get_weather, 
