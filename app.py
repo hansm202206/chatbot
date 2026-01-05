@@ -13,7 +13,7 @@ NAVER_CLIENT_ID = st.secrets.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = st.secrets.get("NAVER_CLIENT_SECRET", "")
 WEATHER_API_KEY = st.secrets.get("WEATHER_API_KEY", "")
 
-st.set_page_config(page_title="슈퍼 네이버 AI 비서", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="AI 비서", page_icon="🚀", layout="wide")
 
 # --- 1. 시간 및 데이터베이스 설정 ---
 KST = timezone(timedelta(hours=9))
@@ -126,7 +126,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("왕십리 곱창 맛집 알려줘!"):
+if prompt := st.chat_input("검색할 내용을 입력하세요."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
