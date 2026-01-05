@@ -5,7 +5,7 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 from PIL import Image
-from urllib.parse import quote  # URL 인코딩을 위해 필수
+from urllib.parse import quote
 
 # --- 0. 설정 및 보안 ---
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
@@ -30,22 +30,17 @@ def transform_coords(x, y):
     except: return 37.5612, 127.0385
 
 def make_naver_map_link(title):
-    """
-    네이버 지도 검색 링크를 생성합니다.
-    주소 대신 '가게명 + 지점명'으로만 검색하여 네이버 지도에서 가장 정확한 결과를 띄웁니다.
-    """
-    # 네이버 API 결과의 <b> 태그 제거
+    """가게명+지점명으로 깔끔한 검색 링크 생성 (URL 인코딩 적용)"""
     clean_title = title.replace('<b>', '').replace('</b>', '').strip()
-    # URL에 한글/공백이 들어갈 수 있도록 인코딩
     return f"https://map.naver.com/v5/search/{quote(clean_title)}"
 
-# --- 2. 통합 도구(Tools) 정의 ---
+# --- 2. 지능형 검색 함수 (하드코딩 필터 없음) ---
 def search_naver(query: str):
-    """네이버에서 장소 정보를 검색합니다."""
+    """네이버에서 장소 정보를 가져옵니다. 필터링은 AI가 직접 수행합니다."""
     if not NAVER_CLIENT_ID: return "네이버 API 설정 필요", []
     
-    # 검색 정확도를 위해 sort를 comment(리뷰순)로 설정 가능
-    url = f"https://openapi.naver.com/v1/search/local.json?query={query}&display=5&sort=comment"
+    # AI가 판단할 수 있도록 넉넉히(10개) 가져옵니다.
+    url = f"https://openapi.naver.com/v1/search/local.json?query={query}&display=10&sort=random"
     headers = {"X-Naver-Client-Id": NAVER_CLIENT_ID, "X-Naver-Client-Secret": NAVER_CLIENT_SECRET}
     
     try:
@@ -53,71 +48,88 @@ def search_naver(query: str):
         items = res.get('items', [])
         if not items: return "검색 결과가 없습니다.", []
         
-        info_list = []
+        raw_data_for_ai = []
         locations = []
         for item in items:
             title = item['title'].replace('<b>', '').replace('</b>', '')
             address = item['address']
+            category = item['category']
+            link = make_naver_map_link(title) # 개선된 링크 함수 적용
             
-            # [수정 포인트] 링크 생성 시 '가게명(지점명 포함)'만 사용
-            link = make_naver_map_link(title)
-            
-            info_list.append(f"📍 **{title}** ({item['category']})\n- 주소: {address}\n- [🔗 네이버 지도로 보기]({link})")
+            # AI에게 전달할 원시 데이터
+            raw_data_for_ai.append(f"명칭: {title}, 카테고리: {category}, 주소: {address}, 링크: {link}")
             
             lat, lon = transform_coords(item['mapx'], item['mapy'])
-            locations.append({'lat': lat, 'lon': lon})
+            locations.append({'lat': lat, 'lon': lon, 'name': title})
             
-        return "\n\n".join(info_list), locations
-    except: return "검색 오류 발생", []
+        return "\n".join(raw_data_for_ai), locations
+    except: return "검색 중 오류 발생", []
 
-# --- 3. Gemini 설정 ---
+# --- 3. 기타 도구 정의 (날씨, 시간, 유튜브) ---
+def get_current_time():
+    return datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
+
+def get_weather(city_name: str):
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city_name}&appid={WEATHER_API_KEY}&units=metric&lang=kr"
+    res = requests.get(url).json()
+    return f"📍 {city_name}: {res['main']['temp']}°C, {res['weather'][0]['description']}" if res.get("cod")==200 else "날씨 정보 없음"
+
+def search_youtube(query: str):
+    return f"📺 유튜브 검색 결과: https://www.youtube.com/results?search_query={quote(query)}"
+
+# --- 4. Gemini 설정 (지능형 판단 가이드) ---
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
-    tools=[search_naver], # 필요한 도구 추가 (날씨 등)
-    system_instruction="""당신은 친절한 AI 비서입니다. 
-    1. 장소 검색 시 'search_naver' 결과를 바탕으로 대답하세요.
-    2. 답변에 '가게명', '카테고리', '주소'를 포함하여 깔끔하게 리스트로 보여주세요.
-    3. 링크는 반드시 '[🔗 네이버 지도로 보기](URL)' 형식만 사용하고, URL 주소 자체는 밖으로 노출하지 마세요."""
+    tools=[get_current_time, get_weather, search_naver, search_youtube],
+    system_instruction="""당신은 사용자의 의도를 정확히 파악하는 지능형 비서입니다.
+    1. 장소 검색 시 'search_naver'를 호출하고, 결과를 받으면 사용자의 질문에 적합한 장소만 선별하세요.
+       (예: 맛집 질문에 미용실이 섞여있으면 미용실은 제외하고 답변)
+    2. 답변 시 각 장소의 '주소'를 포함하고, 링크는 반드시 '[🔗 네이버 지도로 보기](URL)' 형식으로만 작성하세요.
+    3. URL 주소를 텍스트로 노출하지 말고 마크다운 링크 안에 숨기세요.
+    4. 친절하고 가독성 좋게 리스트 형태로 답변하세요."""
 )
 
-# --- 4. UI 구성 ---
+# --- 5. UI 로직 ---
 if "chat_session" not in st.session_state:
     st.session_state.chat_session = model.start_chat(enable_automatic_function_calling=True)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-st.title("🚀 AI 비서")
+st.title("🤖 AI 비서")
 
-# 채팅 로그 출력
+with st.sidebar:
+    st.header("⏰ 리마인더")
+    rem_list = conn.execute("SELECT datetime, message FROM reminders ORDER BY datetime ASC").fetchall()
+    for dt, msg in rem_list: st.write(f"🔔 {dt}: {msg}")
+
+uploaded_file = st.file_uploader("🖼️ 사진 분석", type=["jpg", "png", "jpeg"])
+if uploaded_file: st.image(uploaded_file, use_container_width=True)
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        if "map" in msg and msg["map"] is not None:
-            st.map(msg["map"])
+        if "map" in msg and msg["map"] is not None: st.map(msg["map"])
 
-if prompt := st.chat_input("왕십리 맛집 알려줘!"):
+if prompt := st.chat_input("검색할 내용을 입력하세요."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("최적의 장소를 찾는 중..."):
+        with st.spinner("의도 파악 및 정보 분석 중..."):
             try:
-                # 지도 표시를 위한 데이터 미리 추출
+                # 지도 표시를 위한 데이터 추출 (맛집/장소 질문일 경우)
                 info_text, locations = "", []
-                if any(k in prompt for k in ["어디", "맛집", "장소", "근처"]):
+                if any(k in prompt for k in ["어디", "맛집", "장소", "근처", "찾아", "추천"]):
                     info_text, locations = search_naver(prompt)
                 
-                # Gemini 답변 생성
-                response = st.session_state.chat_session.send_message(prompt)
-                st.markdown(response.text)
+                input_content = [prompt, Image.open(uploaded_file)] if uploaded_file else prompt
+                response = st.session_state.chat_session.send_message(input_content)
                 
-                # 지도 표시
+                st.markdown(response.text)
                 map_df = pd.DataFrame(locations) if locations else None
-                if map_df is not None:
-                    st.map(map_df)
+                if map_df is not None: st.map(map_df)
                 
                 st.session_state.messages.append({"role": "assistant", "content": response.text, "map": map_df})
             except Exception as e:
-                st.error(f"오류가 발생했습니다: {e}")
+                st.error(f"오류 발생: {e}")
