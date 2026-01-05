@@ -110,7 +110,7 @@ if "messages" not in st.session_state:
     st.session_state.chat_session = model.start_chat(enable_automatic_function_calling=True)
 
 # --- 5. UI 구성 ---
-st.title("🚀 슈퍼 네이버 AI 비서")
+st.title("🚀 AI 비서")
 
 with st.sidebar:
     st.header("⏰ 리마인더")
