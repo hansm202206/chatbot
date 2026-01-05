@@ -8,7 +8,7 @@ from PIL import Image
 # --- 0. Streamlit Secrets에서 키 불러오기 ---
 # Streamlit Cloud의 Settings -> Secrets에 GEMINI_API_KEY와 WEATHER_API_KEY가 등록되어 있어야 합니다.
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-WEATHER_API_KEY = st.secrets.get("WEATHER_API_KEY", "") # 없으면 빈값
+WEATHER_API_KEY = st.secrets["WEATHER_API_KEY"]
 
 st.set_page_config(page_title="슈퍼 만능 AI", page_icon="🚀", layout="centered")
 
