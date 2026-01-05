@@ -1,106 +1,107 @@
 import streamlit as st
 import google.generativeai as genai
 import sqlite3
+import requests
 from datetime import datetime, timedelta, timezone
+from PIL import Image
 
-# [설정] 본인 키로 교체
-GEMINI_API_KEY = ""
+# --- 0. Streamlit Secrets에서 키 불러오기 ---
+# Streamlit Cloud의 Settings -> Secrets에 GEMINI_API_KEY와 WEATHER_API_KEY가 등록되어 있어야 합니다.
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+WEATHER_API_KEY = st.secrets.get("WEATHER_API_KEY", "") # 없으면 빈값
 
-st.set_page_config(page_title="만능 지식인 AI", page_icon="🌟", layout="centered")
+st.set_page_config(page_title="슈퍼 만능 AI", page_icon="🚀", layout="centered")
 
-# --- DB 설정 (기존과 동일) ---
+# --- 1. DB 및 시간 설정 ---
+KST = timezone(timedelta(hours=9))
 def init_db():
-    conn = sqlite3.connect("smart_bot.db", check_same_thread=False)
+    conn = sqlite3.connect("super_bot.db", check_same_thread=False)
     c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS reminders (datetime TEXT, message TEXT)")
     c.execute("CREATE TABLE IF NOT EXISTS chat_history (role TEXT, content TEXT, timestamp DATETIME)")
+    c.execute("CREATE TABLE IF NOT EXISTS reminders (datetime TEXT, message TEXT)")
     conn.commit()
     return conn
-
 conn = init_db()
 
-# --- 도구 정의 (기존 유지) ---
+# --- 2. AI 도구(Tools) 정의 ---
 def get_current_time():
-    """현재 날짜와 시간을 확인합니다."""
-    now = datetime.now(timezone(timedelta(hours=9)))
-    return now.strftime('%Y년 %m월 %d일 %H시 %M분 %S초 입니다.')
+    """현재 한국 시간을 확인합니다."""
+    return datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
 
-def register_reminder(time_str: str, content: str):
-    """리마인더를 등록합니다."""
-    c = conn.cursor()
-    c.execute("INSERT INTO reminders (datetime, message) VALUES (?, ?)", (time_str, content))
-    conn.commit()
-    return f"✅ 기록 완료: {time_str}에 '{content}' 알림을 저장했습니다."
+def get_weather(city_name: str):
+    """특정 도시의 실시간 날씨를 가져옵니다."""
+    if not WEATHER_API_KEY: return "날씨 API 키가 설정되지 않았습니다."
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city_name}&appid={WEATHER_API_KEY}&units=metric&lang=kr"
+    try:
+        res = requests.get(url).json()
+        if res.get("cod") == 200:
+            return f"📍 {city_name}: {res['weather'][0]['description']}, 온도 {res['main']['temp']}°C"
+        return f"'{city_name}' 도시를 찾을 수 없습니다."
+    except: return "날씨 정보를 가져오는 중 오류가 발생했습니다."
 
-# --- Gemini 설정 (업그레이드 포인트!) ---
-genai.configure(api_key="")
+def search_youtube(query: str):
+    """주제와 관련된 유튜브 검색 링크를 제공합니다."""
+    url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+    return f"📺 '{query}' 관련 유튜브 결과입니다: {url}"
 
-# 1. AI의 성격과 능력을 부여합니다.
-SYSTEM_PROMPT = """
-당신은 세상의 모든 지식을 알고 있는 '만능 AI 지식인'입니다. 
-사용자의 질문에 대해 다음과 같은 원칙으로 답하세요:
-1. 답변은 항상 친절하고 풍부하게 작성하세요.
-2. 모르는 내용이 있다면 추측하지 말고 솔직하게 말하되, 도움이 될 만한 대안을 제시하세요.
-3. 사용자가 과거에 했던 말을 DB에서 기억하고 있으니, 맥락을 적극 활용하세요.
-4. 필요하다면 도구(시간 확인, 리마인더)를 사용해 실질적인 도움을 주세요.
-5. 유머 감각을 발휘하여 친구처럼 대화할 수도 있습니다.
-"""
+# --- 3. Gemini 설정 (Gemini 1.5 Flash 모델 적용) ---
+genai.configure(api_key=GEMINI_API_KEY)
 
-# 2. 창의성 설정을 추가하여 답변을 더 풍부하게 만듭니다.
-generation_config = {
-    "temperature": 0.9,  # 높을수록 창의적이고 다양한 답변이 나옵니다.
-    "top_p": 0.95,
-    "top_k": 40,
-    "max_output_tokens": 2048,
-}
-
+# 말씀하신 대로 최신 고성능 모델인 gemini-1.5-flash를 사용합니다.
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash',
-    tools=[get_current_time, register_reminder],
-    system_instruction=SYSTEM_PROMPT,
-    generation_config=generation_config # 창의성 설정 적용
+    model_name='gemini-2.5-flash', 
+    tools=[get_current_time, get_weather, search_youtube],
+    system_instruction="당신은 사진 분석, 날씨, 유튜브 추천을 수행하는 만능 AI 비서입니다. 과거 대화를 기억하며 친절하게 대답하세요."
 )
 
-# --- 대화 로직 (기존 영구 기억 로직 유지) ---
-def load_chat_history_from_db():
-    c = conn.cursor()
-    c.execute("SELECT role, content FROM chat_history ORDER BY timestamp DESC LIMIT 15") # 기억력 강화 (15개)
-    rows = c.fetchall()[::-1]
-    return [{"role": role, "parts": [content]} for role, content in rows]
-
-def save_message_to_db(role, content):
-    c = conn.cursor()
-    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    c.execute("INSERT INTO chat_history (role, content, timestamp) VALUES (?, ?, ?)", (role, content, now_str))
-    conn.commit()
-
+# --- 4. 대화 로직 ---
 if "messages" not in st.session_state:
-    db_history = load_chat_history_from_db()
-    st.session_state.messages = [{"role": ("assistant" if h["role"] == "model" else "user"), "content": h["parts"][0]} for h in db_history]
-    st.session_state.chat_session = model.start_chat(history=db_history, enable_automatic_function_calling=True)
+    c = conn.cursor()
+    c.execute("SELECT role, content FROM chat_history ORDER BY timestamp DESC LIMIT 10")
+    db_rows = c.fetchall()[::-1]
+    st.session_state.messages = [{"role": ("assistant" if r=='model' else 'user'), "content": c} for r, c in db_rows]
+    st.session_state.chat_session = model.start_chat(
+        history=[{"role": r, "parts": [c]} for r, c in db_rows],
+        enable_automatic_function_calling=True
+    )
 
-# --- UI 레이아웃 ---
-st.title("🌟 만능 지식인 AI")
-st.write("무엇이든 물어보세요! 당신의 모든 말을 기억하고 대답해 드립니다.")
+# --- 5. UI 구성 ---
+st.title("🚀 슈퍼 만능 AI 비서")
 
+# 이미지 업로드
+uploaded_file = st.file_uploader("🖼️ 사진을 분석해 드릴까요?", type=["jpg", "png", "jpeg"])
+if uploaded_file:
+    st.image(uploaded_file, caption="업로드된 이미지", use_container_width=True)
+
+# 채팅 출력
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("질문, 고민상담, 리마인더 등록 등 무엇이든 말씀하세요!"):
+# 입력 처리
+if prompt := st.chat_input("무엇이든 물어보세요!"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    save_message_to_db("user", prompt)
     with st.chat_message("user"):
         st.markdown(prompt)
+    
+    # DB 저장
+    c = conn.cursor()
+    c.execute("INSERT INTO chat_history (role, content, timestamp) VALUES (?, ?, ?)", ("user", prompt, datetime.now()))
+    conn.commit()
 
     with st.chat_message("assistant"):
-        response = st.session_state.chat_session.send_message(prompt)
-        full_response = response.text
-        st.markdown(full_response)
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-        save_message_to_db("model", full_response)
-
-# 사이드바 (기존 유지)
-with st.sidebar:
-    st.header("⏰ 예정된 리마인더")
-    # ... 리마인더 표시 로직 ...
+        with st.spinner("생각 중..."):
+            if uploaded_file:
+                img = Image.open(uploaded_file)
+                # 이미지와 텍스트 함께 전송
+                response = st.session_state.chat_session.send_message([prompt, img])
+            else:
+                response = st.session_state.chat_session.send_message(prompt)
+            
+            full_res = response.text
+            st.markdown(full_res)
+            st.session_state.messages.append({"role": "assistant", "content": full_res})
+            
+            # AI 응답 DB 저장
+            c.execute("INSERT INTO chat_history (role, content, timestamp) VALUES (?, ?, ?)", ("model", full_res, datetime.now()))
+            conn.commit()
