@@ -84,6 +84,10 @@ model = genai.GenerativeModel(
     - 사용자와의 이전 대화 내용을 기억하며 친절하게 대답하세요."""
 )
 
+# [중요] 세션 시작 시 도구 호출 기능을 활성화하도록 초기화합니다.
+if "chat_session" not in st.session_state:
+    st.session_state.chat_session = model.start_chat(enable_automatic_function_calling=True)
+
 # --- 4. 대화 기록 로드 및 세션 관리 ---
 if "messages" not in st.session_state:
     c = conn.cursor()
