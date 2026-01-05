@@ -60,21 +60,13 @@ def register_reminder(time_str: str, content: str):
 # --- 3. Gemini 1.5 Flash 설정 (뉴스/맛집 검색 도구 추가) ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Tool 설정을 딕셔너리 구조로 명확하게 정의합니다.
-# 이 구조는 라이브러리 버전에 상관없이 API 서버에서 직접 해석합니다.
-tools_list = [
-    get_current_time, 
-    get_weather, 
-    search_youtube, 
-    register_reminder,
-    # 'google_search_retrieval' 대신 아래의 'google_search' 필드만 사용합니다.
-    {'google_search': {}} 
-]
+# 1. 내가 직접 만든 함수들 (날씨, 시간 등)
+my_functions = [get_current_time, get_weather, search_youtube, register_reminder]
 
 # google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
 model = genai.GenerativeModel(
     model_name='gemini-1.5-flash', 
-    tools=tools_list,
+    tools=my_functions + ['google_search'],
     system_instruction="""당신은 사진 분석, 실시간 뉴스 검색, 맛집 추천이 가능한 만능 AI 비서입니다.
     - 실시간 정보나 뉴스 질문에는 반드시 구글 검색 도구를 사용하여 최신 정보를 요약하세요.
     - 맛집이나 장소를 추천할 때는 주소, 특징, 평점 등을 상세히 알려주세요.
