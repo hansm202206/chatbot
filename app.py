@@ -58,7 +58,7 @@ def register_reminder(time_str: str, content: str):
     return f"✅ 확인되었습니다. {time_str}에 '{content}'라고 기억해둘게요."
 
 # --- 3. Gemini 1.5 Flash 설정 (뉴스/맛집 검색 도구 추가) ---
-genai.configure(api_key=GEMINI_API_KEY)
+genai.configure(api_key="")
 
 # google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
 model = genai.GenerativeModel(
