@@ -78,7 +78,7 @@ def save_message_to_db(role, content):
 # -----------------------------
 genai.configure(api_key="")
 model = genai.GenerativeModel(
-    model_name='gemini-2.0-flash',
+    model_name='gemini-2.5-flash',
     tools=[get_current_time, register_reminder],
     system_instruction="당신은 대화 내용을 모두 기억하는 유능한 비서입니다. 이전 대화 맥락을 참고하여 답변하세요."
 )
