@@ -67,10 +67,12 @@ def load_chat_history_from_db():
     return history
 
 def save_message_to_db(role, content):
-    """대화 내용을 DB에 한 줄 저장합니다."""
+    """대화 내용을 DB에 한 줄 저장합니다. (경고 방지 버전)"""
     c = conn.cursor()
+    # datetime 객체 대신 .strftime()을 사용해 문자열로 변환하여 저장
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     c.execute("INSERT INTO chat_history (role, content, timestamp) VALUES (?, ?, ?)", 
-              (role, content, datetime.now()))
+              (role, content, now_str))
     conn.commit()
 
 # -----------------------------
