@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 # -----------------------------
 # [설정] 본인 키로 교체
 # -----------------------------
-GEMINI_API_KEY = "AIzaSyDd4otbfFEDQArGV82Z2VJhtEOSiQQkaiU"
+# GEMINI_API_KEY = ""
 
 # -----------------------------
 # 페이지 설정
@@ -76,7 +76,7 @@ def save_message_to_db(role, content):
 # -----------------------------
 # Gemini 설정
 # -----------------------------
-genai.configure(api_key=GEMINI_API_KEY)
+genai.configure(api_key="")
 model = genai.GenerativeModel(
     model_name='gemini-2.0-flash',
     tools=[get_current_time, register_reminder],
