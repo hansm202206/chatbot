@@ -63,9 +63,16 @@ genai.configure(api_key=GEMINI_API_KEY)
 # 1. 내가 직접 만든 함수들 (날씨, 시간 등)
 my_functions = [get_current_time, get_weather, search_youtube, register_reminder]
 
-# 2. 구글 검색 도구 정의 (변수로 정의)
-# 주의: 여기서 만든 변수 이름 그대로 따옴표 없이 사용해야 합니다.
-google_search_tool = {"google_search": {}}
+# 2. 구글 검색 도구 정의 (명칭을 google_search_retrieval로 변경)
+# 내부 설정(dynamic_retrieval_config)을 추가하면 더 정확하게 작동합니다.
+google_search_tool = {
+    "google_search_retrieval": {
+        "dynamic_retrieval_config": {
+            "mode": "unspecified", 
+            "dynamic_threshold": 0.06 
+        }
+    }
+}
 
 # google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
 model = genai.GenerativeModel(
