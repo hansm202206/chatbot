@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
 
-# --- 0. 설정 및 보안 (Secrets) ---
+# --- 0. 설정 및 보안 (Secrets 필수 확인) ---
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 NAVER_CLIENT_ID = st.secrets.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = st.secrets.get("NAVER_CLIENT_SECRET", "")
@@ -46,12 +46,16 @@ def get_weather(city_name: str):
     except: return "날씨 조회 중 오류 발생."
 
 def search_naver(query: str):
-    """네이버 검색을 통해 맛집 정보를 더 정확하게 가져옵니다."""
+    """네이버 장소 검색(local.json)을 사용하여 맛집 정보를 가져옵니다."""
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
-        return "네이버 API 키가 설정되지 않았습니다."
+        return "네이버 API 키가 설정되지 않았습니다. Secrets 설정을 확인해주세요."
     
-    # 1. 먼저 지역(맛집) 검색 시도
-    url = f"https://openapi.naver.com/v1/search/local.json?query={query}&display=5&sort=comment"
+    # 검색 정확도를 위해 불필요한 수식어 제거
+    clean_query = query.replace("맛집", "").replace("추천해줘", "").replace("추천", "").strip()
+    
+    # 핵심: local.json 경로를 사용해야 식당 데이터가 나옵니다.
+    url = f"https://openapi.naver.com/v1/search/local.json?query={clean_query}&display=5&sort=comment"
+    
     headers = {
         "X-Naver-Client-Id": NAVER_CLIENT_ID,
         "X-Naver-Client-Secret": NAVER_CLIENT_SECRET
@@ -61,30 +65,17 @@ def search_naver(query: str):
         res = requests.get(url, headers=headers).json()
         items = res.get('items', [])
         
-        # 2. 결과가 없으면 블로그 검색으로 재시도 (최신 리뷰 확보)
         if not items:
-            blog_url = f"https://openapi.naver.com/v1/search/blog.json?query={query}&display=5"
-            res = requests.get(blog_url, headers=headers).json()
-            items = res.get('items', [])
-            if not items:
-                return f"'{query}'에 대해 네이버에서 검색된 장소나 리뷰가 없습니다."
-            
-            # 블로그 결과 정리
-            results = ["🏠 장소 정보 대신 최신 블로그 리뷰를 찾았습니다:"]
-            for item in items:
-                title = item['title'].replace('<b>', '').replace('</b>', '')
-                results.append(f"- {title} ({item['postdate']})\n  링크: {item['link']}")
-            return "\n".join(results)
+            return f"'{clean_query}'에 대한 장소 검색 결과가 없습니다. 네이버 개발자 센터에서 '지역' API 권한이 활성화되어 있는지 확인이 필요합니다."
         
-        # 3. 지역 검색 결과 정리 (HTML 태그 제거)
-        results = ["🍴 네이버에서 찾은 추천 장소입니다:"]
+        results = [f"🍴 '{clean_query}' 관련 네이버 검색 결과입니다:"]
         for item in items:
-            title = item['title'].replace('<b>', '').replace('</b>', '')
+            title = item['title'].replace('<b>', '').replace('</b>', '') # HTML 태그 제거
             address = item['address']
             category = item['category']
             results.append(f"- **{title}** ({category})\n  📍 주소: {address}")
             
-        return "\n".join(results)
+        return "\n\n".join(results)
     except Exception as e:
         return f"네이버 검색 중 오류 발생: {str(e)}"
 
@@ -94,25 +85,23 @@ def search_youtube(query: str):
     return f"📺 유튜브 검색 결과: {url}"
 
 def register_reminder(time_str: str, content: str):
-    """리마인더 저장. 형식: 'YYYY-MM-DD HH:MM'"""
+    """리마인더 저장."""
     c = conn.cursor()
     c.execute("INSERT INTO reminders (datetime, message) VALUES (?, ?)", (time_str, content))
     conn.commit()
-    return f"✅ {time_str}에 '{content}'를 리마인더에 등록했습니다."
+    return f"✅ {time_str}에 '{content}'를 등록했습니다."
 
-# --- 3. Gemini 1.5 Flash 설정 (네이버 도구 적용) ---
+# --- 3. Gemini 1.5 Flash 설정 ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 구글 검색(google_search)을 제거하고 네이버 함수(search_naver)를 포함
-my_tools = [get_current_time, get_weather, search_naver, search_youtube, register_reminder]
-
+# 구글 검색 대신 네이버 함수를 도구로 사용
 model = genai.GenerativeModel(
     model_name='gemini-2.5-flash', 
-    tools=my_tools,
-    system_instruction="""당신은 실시간 검색이 가능한 만능 AI 비서입니다.
-    - 맛집, 뉴스, 장소 질문에는 반드시 'search_naver' 도구를 사용하여 정보를 가져오세요.
-    - 검색 결과에서 HTML 태그(<b> 등)는 제거하고 깔끔하게 정리해 대답하세요.
-    - 사진 분석도 가능하며, 항상 친절하게 한국어로 답변하세요."""
+    tools=[get_current_time, get_weather, search_naver, search_youtube, register_reminder],
+    system_instruction="""당신은 실시간 정보를 네이버에서 찾아주는 만능 비서입니다.
+    - 맛집이나 장소를 물어보면 반드시 'search_naver' 함수를 호출하세요.
+    - 검색 결과가 나오면 주소와 특징을 정리해서 사용자에게 친절하게 알려주세요.
+    - 사진을 올리면 사진 내용을 분석하고 관련된 정보를 검색해서 대답하세요."""
 )
 
 # --- 4. 대화 세션 관리 ---
@@ -123,7 +112,6 @@ if "messages" not in st.session_state:
 # --- 5. UI 구성 ---
 st.title("🚀 슈퍼 네이버 AI 비서")
 
-# 사이드바 리마인더
 with st.sidebar:
     st.header("⏰ 리마인더")
     reminders = conn.execute("SELECT datetime, message FROM reminders ORDER BY datetime ASC").fetchall()
@@ -134,18 +122,17 @@ uploaded_file = st.file_uploader("🖼️ 사진 분석", type=["jpg", "png", "j
 if uploaded_file:
     st.image(uploaded_file, use_container_width=True)
 
-# 채팅 출력 및 입력
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("검색내용 입력해주세요."):
+if prompt := st.chat_input("왕십리 곱창 맛집 알려줘!"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("네이버 검색 중..."):
+        with st.spinner("정보를 찾는 중..."):
             try:
                 if uploaded_file:
                     img = Image.open(uploaded_file)
@@ -156,9 +143,5 @@ if prompt := st.chat_input("검색내용 입력해주세요."):
                 res_text = response.text
                 st.markdown(res_text)
                 st.session_state.messages.append({"role": "assistant", "content": res_text})
-                
-                # 맛집 키워드 시 지도 표시
-                if "맛집" in prompt:
-                    st.map(pd.DataFrame({'lat': [37.5612], 'lon': [127.0385]})) # 왕십리역 좌표 샘플
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
