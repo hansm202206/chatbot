@@ -57,42 +57,35 @@ def register_reminder(time_str: str, content: str):
     conn.commit()
     return f"✅ 확인되었습니다. {time_str}에 '{content}'라고 기억해둘게요."
 
-# --- 3. Gemini 1.5 Flash 설정 (뉴스/맛집 검색 도구 추가) ---
-import google.generativeai.types as types
-
+# --- 3. Gemini 1.5 Flash 설정 (라이브러리 버전 맞춤형 해결) ---
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 1. 내가 직접 만든 함수들 (날씨, 시간 등)
+# 1. 커스텀 함수 리스트
 my_functions = [get_current_time, get_weather, search_youtube, register_reminder]
 
-# # 2. 구글 검색 도구 정의 (명칭을 google_search_retrieval로 변경)
-# # 내부 설정(dynamic_retrieval_config)을 추가하면 더 정확하게 작동합니다.
-# google_search_tool = {
-#     "google_search_retrieval": {
-#         "dynamic_retrieval_config": {
-#             "mode": "unspecified", 
-#             "dynamic_threshold": 0.06 
-#         }
-#     }
-# }
+# 2. 구글 검색 도구 설정
+# 주의: 'types' 모듈을 쓰지 않고, 순수 딕셔너리로 정의하여 AttributeError를 원천 차단합니다.
+# 이 구조는 고객님의 로그에서 "가능하다"고 확인된 유일한 구조입니다.
+google_search_tool = {
+    "google_search_retrieval": {
+        "dynamic_retrieval_config": {
+            "mode": "unspecified",
+            "dynamic_threshold": 0.06
+        }
+    }
+}
 
-# 2. 구글 검색 도구 설정 (객체 방식)
-# 라이브러리가 0.8.3 이상이어야 이 코드가 작동합니다. (requirements.txt 확인 필수)
-google_search_tool = types.Tool(
-    google_search=types.GoogleSearch() # 최신 라이브러리 표준 방식
-)
-
-# google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
+# 3. 모델 초기화
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash-002', 
+    model_name='gemini-1.5-flash',
+    # 리스트 안에 딕셔너리를 넣는 이 방식이 가장 안전합니다.
     tools=my_functions + [google_search_tool],
-    system_instruction="""당신은 사진 분석, 실시간 뉴스 검색, 맛집 추천이 가능한 만능 AI 비서입니다.
-    - 실시간 정보나 뉴스 질문에는 반드시 구글 검색 도구를 사용하여 최신 정보를 요약하세요.
-    - 맛집이나 장소를 추천할 때는 주소, 특징, 평점 등을 상세히 알려주세요.
-    - 사용자와의 이전 대화 내용을 기억하며 친절하게 대답하세요."""
+    system_instruction="""당신은 맛집 찾기와 실시간 정보 검색의 달인입니다.
+    - 맛집 질문이 들어오면 반드시 'Google Search' 도구를 써서 최신 평점과 위치를 확인하세요.
+    - 추천 시 가게 이름, 평점, 대표 메뉴, 그리고 한 줄 평을 정리해서 보여주세요."""
 )
 
-# [중요] 세션 시작 시 도구 호출 기능을 활성화하도록 초기화합니다.
+# 세션 초기화
 if "chat_session" not in st.session_state:
     st.session_state.chat_session = model.start_chat(enable_automatic_function_calling=True)
 
