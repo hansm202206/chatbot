@@ -87,7 +87,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 my_tools = [get_current_time, get_weather, search_naver, search_youtube, register_reminder]
 
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash', 
+    model_name='gemini-2.5-flash', 
     tools=my_tools,
     system_instruction="""당신은 실시간 검색이 가능한 만능 AI 비서입니다.
     - 맛집, 뉴스, 장소 질문에는 반드시 'search_naver' 도구를 사용하여 정보를 가져오세요.
@@ -119,7 +119,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("왕십리 맛집 알려줘!"):
+if prompt := st.chat_input("검색내용 입력해주세요."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
