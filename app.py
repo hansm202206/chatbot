@@ -5,6 +5,7 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 from PIL import Image
+from urllib.parse import quote  # URL 공백 처리를 위한 라이브러리
 
 # --- 0. 설정 및 보안 ---
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
@@ -29,8 +30,11 @@ def transform_coords(x, y):
     except: return 37.5612, 127.0385
 
 def make_naver_map_link(title, address):
+    """링크가 깨지지 않도록 공백을 특수문자로 변환하여 깔끔한 마크다운 링크 생성"""
     clean_title = title.replace('<b>', '').replace('</b>', '')
-    return f"https://map.naver.com/v5/search/{clean_title}%20{address}"
+    search_query = f"{clean_title} {address}"
+    # quote를 사용해 URL 내의 공백을 %20 등으로 변환합니다.
+    return f"https://map.naver.com/v5/search/{quote(search_query)}"
 
 # --- 2. 통합 도구(Tools) 정의 ---
 def search_naver(query: str):
@@ -47,8 +51,10 @@ def search_naver(query: str):
         locations = []
         for item in items:
             title = item['title'].replace('<b>', '').replace('</b>', '')
+            # 깔끔한 하이퍼링크 생성
             link = make_naver_map_link(title, item['address'])
             info_list.append(f"📍 **{title}** ({item['category']})\n- 주소: {item['address']}\n- [🔗 네이버 지도로 보기]({link})")
+            
             lat, lon = transform_coords(item['mapx'], item['mapy'])
             locations.append({'lat': lat, 'lon': lon})
         return "\n\n".join(info_list), locations
@@ -60,7 +66,7 @@ def get_weather(city_name: str):
     return f"📍 {city_name}: {res['main']['temp']}°C, {res['weather'][0]['description']}" if res.get("cod")==200 else "날씨 정보 없음"
 
 def search_youtube(query: str):
-    return f"📺 유튜브 검색 결과: https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+    return f"📺 유튜브 검색 결과: https://www.youtube.com/results?search_query={quote(query)}"
 
 # --- 3. Gemini 설정 ---
 genai.configure(api_key=GEMINI_API_KEY)
@@ -68,9 +74,9 @@ model = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
     tools=[search_naver, get_weather, search_youtube],
     system_instruction="""당신은 친절한 AI 비서입니다. 
-    1. 장소 검색 시 'search_naver' 결과를 바탕으로 깔끔하게 리스트 형태로 대답하세요.
-    2. 링크는 반드시 '[🔗 네이버 지도로 보기](URL)' 형식을 유지하세요.
-    3. 사용자의 질문 의도에 맞는 장소만 선별하여 답변하세요."""
+    1. 장소 검색 시 'search_naver' 결과를 바탕으로 대답하세요.
+    2. 답변에 검색 결과의 '주소'는 포함하되, 원본 URL 링크는 절대로 밖으로 노출하지 마세요.
+    3. 반드시 '[🔗 네이버 지도로 보기](URL)' 형식의 마크다운 링크만 사용하세요."""
 )
 
 # --- 4. UI 구성 ---
@@ -99,16 +105,20 @@ if prompt := st.chat_input("궁금한 것을 물어보세요!"):
     with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # 지도 좌표 수동 추출 로직
-        info_text, locations = "", []
-        if any(k in prompt for k in ["어디", "맛집", "장소", "근처"]):
-            info_text, locations = search_naver(prompt)
-        
-        input_content = [prompt, Image.open(uploaded_file)] if uploaded_file else prompt
-        response = st.session_state.chat_session.send_message(input_content)
-        
-        st.markdown(response.text)
-        map_df = pd.DataFrame(locations) if locations else None
-        if map_df is not None: st.map(map_df)
-        
-        st.session_state.messages.append({"role": "assistant", "content": response.text, "map": map_df})
+        with st.spinner("생각 중..."):
+            try:
+                # 지도 좌표 수동 추출 (st.map 표시용)
+                info_text, locations = "", []
+                if any(k in prompt for k in ["어디", "맛집", "장소", "근처"]):
+                    info_text, locations = search_naver(prompt)
+                
+                input_content = [prompt, Image.open(uploaded_file)] if uploaded_file else prompt
+                response = st.session_state.chat_session.send_message(input_content)
+                
+                st.markdown(response.text)
+                map_df = pd.DataFrame(locations) if locations else None
+                if map_df is not None: st.map(map_df)
+                
+                st.session_state.messages.append({"role": "assistant", "content": response.text, "map": map_df})
+            except Exception as e:
+                st.error(f"오류가 발생했습니다: {e}")
