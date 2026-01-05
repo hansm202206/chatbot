@@ -46,12 +46,12 @@ def get_weather(city_name: str):
     except: return "날씨 조회 중 오류 발생."
 
 def search_naver(query: str):
-    """네이버 검색을 통해 실시간 뉴스나 맛집 정보를 가져옵니다."""
+    """네이버 검색을 통해 맛집 정보를 더 정확하게 가져옵니다."""
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
         return "네이버 API 키가 설정되지 않았습니다."
     
-    # 뉴스 검색과 지역(맛집) 검색을 동시에 수행
-    url = f"https://openapi.naver.com/v1/search/local.json?query={query}&display=5"
+    # 1. 먼저 지역(맛집) 검색 시도
+    url = f"https://openapi.naver.com/v1/search/local.json?query={query}&display=5&sort=comment"
     headers = {
         "X-Naver-Client-Id": NAVER_CLIENT_ID,
         "X-Naver-Client-Secret": NAVER_CLIENT_SECRET
@@ -60,13 +60,33 @@ def search_naver(query: str):
     try:
         res = requests.get(url, headers=headers).json()
         items = res.get('items', [])
-        if not items:
-            return f"'{query}'에 대한 네이버 검색 결과가 없습니다."
         
-        results = [f"제목: {item['title']}, 주소: {item['address']}, 링크: {item['link']}" for item in items]
+        # 2. 결과가 없으면 블로그 검색으로 재시도 (최신 리뷰 확보)
+        if not items:
+            blog_url = f"https://openapi.naver.com/v1/search/blog.json?query={query}&display=5"
+            res = requests.get(blog_url, headers=headers).json()
+            items = res.get('items', [])
+            if not items:
+                return f"'{query}'에 대해 네이버에서 검색된 장소나 리뷰가 없습니다."
+            
+            # 블로그 결과 정리
+            results = ["🏠 장소 정보 대신 최신 블로그 리뷰를 찾았습니다:"]
+            for item in items:
+                title = item['title'].replace('<b>', '').replace('</b>', '')
+                results.append(f"- {title} ({item['postdate']})\n  링크: {item['link']}")
+            return "\n".join(results)
+        
+        # 3. 지역 검색 결과 정리 (HTML 태그 제거)
+        results = ["🍴 네이버에서 찾은 추천 장소입니다:"]
+        for item in items:
+            title = item['title'].replace('<b>', '').replace('</b>', '')
+            address = item['address']
+            category = item['category']
+            results.append(f"- **{title}** ({category})\n  📍 주소: {address}")
+            
         return "\n".join(results)
-    except:
-        return "네이버 검색 중 오류가 발생했습니다."
+    except Exception as e:
+        return f"네이버 검색 중 오류 발생: {str(e)}"
 
 def search_youtube(query: str):
     """유튜브 검색 링크를 제공합니다."""
