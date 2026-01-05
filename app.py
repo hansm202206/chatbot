@@ -68,7 +68,7 @@ model = genai.GenerativeModel(
         get_weather, 
         search_youtube, 
         register_reminder,
-        {"google_search": {}} # 실시간 웹 검색 도구 추가
+        'google_search' # 실시간 웹 검색 도구 추가
     ],
     system_instruction="""당신은 사진 분석, 실시간 뉴스 검색, 맛집 추천이 가능한 만능 AI 비서입니다.
     - 실시간 정보나 뉴스 질문에는 반드시 구글 검색 도구를 사용하여 최신 정보를 요약하세요.
