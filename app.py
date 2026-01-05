@@ -65,20 +65,26 @@ genai.configure(api_key=GEMINI_API_KEY)
 # 1. 내가 직접 만든 함수들 (날씨, 시간 등)
 my_functions = [get_current_time, get_weather, search_youtube, register_reminder]
 
-# 2. 구글 검색 도구 정의 (명칭을 google_search_retrieval로 변경)
-# 내부 설정(dynamic_retrieval_config)을 추가하면 더 정확하게 작동합니다.
-google_search_tool = {
-    "google_search_retrieval": {
-        "dynamic_retrieval_config": {
-            "mode": "unspecified", 
-            "dynamic_threshold": 0.06 
-        }
-    }
-}
+# # 2. 구글 검색 도구 정의 (명칭을 google_search_retrieval로 변경)
+# # 내부 설정(dynamic_retrieval_config)을 추가하면 더 정확하게 작동합니다.
+# google_search_tool = {
+#     "google_search_retrieval": {
+#         "dynamic_retrieval_config": {
+#             "mode": "unspecified", 
+#             "dynamic_threshold": 0.06 
+#         }
+#     }
+# }
+
+# 2. 구글 검색 도구 설정 (객체 방식)
+# 라이브러리가 0.8.3 이상이어야 이 코드가 작동합니다. (requirements.txt 확인 필수)
+google_search_tool = types.Tool(
+    google_search=types.GoogleSearch() # 최신 라이브러리 표준 방식
+)
 
 # google_search 도구를 추가하여 실시간 뉴스 및 장소 검색이 가능하게 합니다.
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash', 
+    model_name='gemini-1.5-flash-002', 
     tools=my_functions + [google_search_tool],
     system_instruction="""당신은 사진 분석, 실시간 뉴스 검색, 맛집 추천이 가능한 만능 AI 비서입니다.
     - 실시간 정보나 뉴스 질문에는 반드시 구글 검색 도구를 사용하여 최신 정보를 요약하세요.
